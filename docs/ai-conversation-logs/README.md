@@ -1,3 +1,8 @@
 This directory holds uncurated AI conversation logs for the Bytebeam Fleet Console assignment.
 
-The Cursor Cloud agent transcript for this work is included as `cursor-cloud-agent.md` (exported from the coding session: planning, DuckDB choices, geofence strategy, test failures, and corrections). Dead ends are left in.
+Copied as-is from Cursor agent transcript folders (jsonl, including subagents). Dead ends are left in.
+
+- `cursor-cloud-agent.md` — earlier cloud-agent export
+- `bytebeam-*` — Cursor transcripts from `bytebeam-fleet-console`
+- `lbm-*` — related Cursor transcripts from `lbm-health-hub` (assignment planning / earlier session)
+
