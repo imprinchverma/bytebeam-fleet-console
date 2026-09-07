@@ -17,6 +17,7 @@ class FleetRepository {
   final FleetDatabase db;
   final AppClock _clock;
   final GeofenceReplay _replay;
+  int _seq = 0;
 
   DateTime get now => _clock.now();
 
@@ -52,9 +53,20 @@ class FleetRepository {
 
     await db.transaction(() async {
       await db.execute(
-        'INSERT INTO packets (id, vehicle_id, event_time, ingest_time) VALUES (?, ?, ?, ?)',
+        '''
+        INSERT INTO packets (id, vehicle_id, event_time, ingest_time)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT (vehicle_id, event_time) DO NOTHING
+        ''',
         [packet.id, packet.vehicleId, eventTime, ingestTime],
       );
+      final stored = await db.selectOne(
+        'SELECT id FROM packets WHERE vehicle_id = ? AND event_time = ?',
+        [packet.vehicleId, eventTime],
+      );
+      if (asString(stored?['id']) != packet.id) {
+        return;
+      }
       for (final entry in packet.signals.entries) {
         await db.execute(
           '''
@@ -266,25 +278,34 @@ class FleetRepository {
     if (evaluation.inBreach && evaluation.fresh) {
       final severity = evaluation.severity!.name;
       if (open == null) {
+        final id =
+            'alert_${vehicleId}_${evaluation.kind}_${now.microsecondsSinceEpoch}_${_seq++}';
         await db.execute(
           '''
           INSERT INTO alerts (id, vehicle_id, kind, severity, opened_at)
           VALUES (?, ?, ?, ?, ?)
           ''',
-          [
-            'alert_${vehicleId}_${evaluation.kind}_${now.microsecondsSinceEpoch}',
-            vehicleId,
-            evaluation.kind,
-            severity,
-            now,
-          ],
+          [id, vehicleId, evaluation.kind, severity, now],
         );
-      } else if (asString(open['dismissed_at']) == null ||
-          open['dismissed_at'] == null) {
+        await _logAlertEvent(
+          alertId: id,
+          vehicleId: vehicleId,
+          kind: evaluation.kind,
+          action: 'opened',
+          severity: severity,
+        );
+      } else if (open['dismissed_at'] == null) {
         if (asString(open['severity']) != severity) {
           await db.execute(
             'UPDATE alerts SET severity = ? WHERE id = ?',
             [severity, asString(open['id'])],
+          );
+          await _logAlertEvent(
+            alertId: asString(open['id'])!,
+            vehicleId: vehicleId,
+            kind: evaluation.kind,
+            action: 'escalated',
+            severity: severity,
           );
         }
       }
@@ -298,25 +319,85 @@ class FleetRepository {
           'UPDATE alerts SET resolved_at = ? WHERE id = ?',
           [now, asString(open['id'])],
         );
+        await _logAlertEvent(
+          alertId: asString(open['id'])!,
+          vehicleId: vehicleId,
+          kind: evaluation.kind,
+          action: evaluation.inBreach ? 'stale_resolved' : 'cleared',
+          severity: asString(open['severity']),
+        );
       }
     }
+  }
+
+  Future<void> _logAlertEvent({
+    required String alertId,
+    required String vehicleId,
+    required String kind,
+    required String action,
+    String? severity,
+    String? reason,
+  }) {
+    return db.execute(
+      '''
+      INSERT INTO alert_events (id, alert_id, vehicle_id, kind, action, severity, reason, occurred_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ''',
+      [
+        'aevt_${alertId}_${action}_${now.microsecondsSinceEpoch}_${_seq++}',
+        alertId,
+        vehicleId,
+        kind,
+        action,
+        severity,
+        reason,
+        now,
+      ],
+    );
   }
 
   Future<void> dismissAlert({
     required String alertId,
     required String reason,
-  }) {
-    return db.execute(
+  }) async {
+    final row = await db.selectOne(
+      'SELECT vehicle_id, kind, severity FROM alerts WHERE id = ?',
+      [alertId],
+    );
+    await db.execute(
       'UPDATE alerts SET dismissed_at = ?, dismiss_reason = ? WHERE id = ? AND resolved_at IS NULL',
       [now, reason, alertId],
     );
+    if (row != null) {
+      await _logAlertEvent(
+        alertId: alertId,
+        vehicleId: asString(row['vehicle_id'])!,
+        kind: asString(row['kind'])!,
+        action: 'dismissed',
+        severity: asString(row['severity']),
+        reason: reason,
+      );
+    }
   }
 
-  Future<void> undoDismiss(String alertId) {
-    return db.execute(
+  Future<void> undoDismiss(String alertId) async {
+    final row = await db.selectOne(
+      'SELECT vehicle_id, kind, severity FROM alerts WHERE id = ?',
+      [alertId],
+    );
+    await db.execute(
       'UPDATE alerts SET dismissed_at = NULL, dismiss_reason = NULL WHERE id = ? AND resolved_at IS NULL',
       [alertId],
     );
+    if (row != null) {
+      await _logAlertEvent(
+        alertId: alertId,
+        vehicleId: asString(row['vehicle_id'])!,
+        kind: asString(row['kind'])!,
+        action: 'undo_dismiss',
+        severity: asString(row['severity']),
+      );
+    }
   }
 
   Future<List<FenceVersion>> loadFenceVersions() async {

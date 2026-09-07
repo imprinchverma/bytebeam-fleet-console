@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+
 import '../../core/constants.dart';
 import '../../core/geo.dart';
 import '../../domain/models.dart';
@@ -201,8 +205,11 @@ class GeofenceReplay {
   }
 
   String _eventId(String vehicleId, String kind, String fenceId, DateTime t) =>
-      'evt_${vehicleId}_${kind}_${fenceId}_${t.microsecondsSinceEpoch}';
+      'evt_${_hash('$vehicleId|$kind|$fenceId|${t.toUtc().toIso8601String()}')}';
 
   String _tripId(String vehicleId, String originId, DateTime startedAt) =>
-      'trip_${vehicleId}_${originId}_${startedAt.microsecondsSinceEpoch}';
+      'trip_${_hash('$vehicleId|$originId|${startedAt.toUtc().toIso8601String()}')}';
+
+  String _hash(String input) =>
+      sha256.convert(utf8.encode(input)).toString().substring(0, 20);
 }

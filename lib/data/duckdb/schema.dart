@@ -103,6 +103,17 @@ CREATE TABLE IF NOT EXISTS alerts (
 CREATE INDEX IF NOT EXISTS idx_alerts_open
   ON alerts (vehicle_id, kind, resolved_at);
 
+CREATE TABLE IF NOT EXISTS alert_events (
+  id VARCHAR PRIMARY KEY,
+  alert_id VARCHAR NOT NULL,
+  vehicle_id VARCHAR NOT NULL,
+  kind VARCHAR NOT NULL,
+  action VARCHAR NOT NULL,
+  severity VARCHAR,
+  reason VARCHAR,
+  occurred_at TIMESTAMP NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS soc_hourly (
   vehicle_id VARCHAR NOT NULL,
   hour TIMESTAMP NOT NULL,
