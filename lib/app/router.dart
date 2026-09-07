@@ -1,5 +1,6 @@
 import 'package:go_router/go_router.dart';
 
+import '../features/alerts/alerts_screen.dart';
 import '../features/fleet/fleet_home_screen.dart';
 import '../features/geofences/geofence_edit_screen.dart';
 import '../features/geofences/geofence_list_screen.dart';
@@ -8,6 +9,10 @@ import '../features/vehicle/vehicle_detail_screen.dart';
 final appRouter = GoRouter(
   routes: [
     GoRoute(path: '/', builder: (context, state) => const FleetHomeScreen()),
+    GoRoute(
+      path: '/alerts',
+      builder: (context, state) => const AlertsScreen(),
+    ),
     GoRoute(
       path: '/vehicles/:id',
       builder: (context, state) =>

@@ -5,10 +5,9 @@ import 'package:intl/intl.dart';
 
 import '../../app/providers.dart';
 import '../../core/theme/app_theme.dart';
-import '../../data/seed/backfill.dart';
-import '../../data/seed/seed_service.dart';
 import '../../domain/models.dart';
 import '../../shared/widgets/fleet_widgets.dart';
+import '../debug/debug_actions.dart';
 
 class FleetHomeScreen extends ConsumerWidget {
   const FleetHomeScreen({super.key});
@@ -24,12 +23,17 @@ class FleetHomeScreen extends ConsumerWidget {
         title: const Text('Fleet Console'),
         actions: [
           IconButton(
+            tooltip: 'Alerts',
+            onPressed: () => context.push('/alerts'),
+            icon: const Icon(Icons.warning_amber_outlined),
+          ),
+          IconButton(
             tooltip: 'Geofences',
             onPressed: () => context.push('/geofences'),
             icon: const Icon(Icons.radar_outlined),
           ),
           PopupMenuButton<String>(
-            onSelected: (value) => _onMenu(context, ref, value),
+            onSelected: (value) => runFleetDebugAction(context, ref, value),
             itemBuilder: (context) => const [
               PopupMenuItem(value: 'seed', child: Text('Reseed demo fleet')),
               PopupMenuItem(value: 'tick', child: Text('Ingest one live packet')),
@@ -127,35 +131,6 @@ class FleetHomeScreen extends ConsumerWidget {
         FleetFilter.stopped => 'Stopped',
         FleetFilter.offline => 'Offline',
       };
-
-  Future<void> _onMenu(BuildContext context, WidgetRef ref, String value) async {
-    final repo = ref.read(repositoryProvider);
-    switch (value) {
-      case 'seed':
-        await SeedService(repo).seedDemoFleet();
-        bumpRefresh(ref);
-      case 'tick':
-        await ref.read(simulatorProvider.notifier).tickOnce();
-      case 'sim':
-        await ref.read(simulatorProvider.notifier).toggle();
-      case 'compact':
-        final result = await repo.compactRetention();
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Dropped ${result['dropped_readings']} raw readings')),
-          );
-        }
-        bumpRefresh(ref);
-      case 'backfill':
-        if (!context.mounted) return;
-        await showDialog<void>(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => const _BackfillDialog(),
-        );
-        bumpRefresh(ref);
-    }
-  }
 }
 
 class _VehicleTile extends StatelessWidget {
@@ -260,80 +235,6 @@ class _AlertBadge extends StatelessWidget {
         NumberFormat.compact().format(count),
         style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w800),
       ),
-    );
-  }
-}
-
-class _BackfillDialog extends ConsumerStatefulWidget {
-  const _BackfillDialog();
-
-  @override
-  ConsumerState<_BackfillDialog> createState() => _BackfillDialogState();
-}
-
-class _BackfillDialogState extends ConsumerState<_BackfillDialog> {
-  String _phase = 'starting';
-  int _readings = 0;
-  int _vehicles = 0;
-  Object? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _run();
-  }
-
-  Future<void> _run() async {
-    try {
-      await ScaleBackfill(ref.read(repositoryProvider)).run(
-        onProgress: (p) {
-          if (!mounted) return;
-          setState(() {
-            _phase = p.phase;
-            _readings = p.readings;
-            _vehicles = p.vehicles;
-          });
-        },
-      );
-    } catch (e) {
-      _error = e;
-    }
-    if (mounted && _error == null) {
-      Navigator.of(context).pop();
-    } else if (mounted) {
-      setState(() {});
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Scale backfill'),
-      content: SizedBox(
-        width: 360,
-        child: _error != null
-            ? Text('Failed: $_error')
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const LinearProgressIndicator(),
-                  const SizedBox(height: 12),
-                  Text(_phase),
-                  Text('Vehicles $_vehicles / 500'),
-                  Text('Signal rows $_readings'),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'This writes through DuckDB, then rebuilds latest snapshots, geofence trips, and alerts.',
-                    style: TextStyle(color: FleetTheme.muted, fontSize: 12),
-                  ),
-                ],
-              ),
-      ),
-      actions: [
-        if (_error != null)
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
-      ],
     );
   }
 }

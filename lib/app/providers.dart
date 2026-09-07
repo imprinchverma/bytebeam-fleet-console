@@ -38,6 +38,11 @@ final geofencesProvider = FutureProvider<List<Geofence>>((ref) async {
   return ref.watch(repositoryProvider).loadGeofences();
 });
 
+final openAlertsProvider = FutureProvider<List<VehicleAlert>>((ref) async {
+  ref.watch(refreshTickProvider);
+  return ref.watch(repositoryProvider).loadOpenAlerts();
+});
+
 final vehicleDetailProvider =
     FutureProvider.family<VehicleDetailData, String>((ref, id) async {
   ref.watch(refreshTickProvider);
