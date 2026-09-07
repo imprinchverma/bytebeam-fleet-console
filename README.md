@@ -8,10 +8,12 @@ Telemetry is stored in an **on-disk DuckDB** file. The UI queries that file. Kil
 
 ```bash
 flutter pub get
+# iOS only: dart_duckdb 1.4.4's GitHub zip 404s; this drops the v1.4.2 framework into the pub cache.
+bash tool/ensure_ios_duckdb.sh
 flutter run
 ```
 
-Android is the primary target (`dart_duckdb` ships native binaries). The first launch seeds 12 demo vehicles and three circular geofences around Bengaluru.
+Android is the primary target (`dart_duckdb` ships native binaries). iOS needs the helper script above because the 1.4.4 plugin asks GitHub for `v1.4.4/duckdb-framework-ios.zip`, which does not exist; v1.4.2 does (same DuckDB binary the plugin changelog claims). The first launch seeds 12 demo vehicles and three circular geofences around Bengaluru.
 
 Useful debug menu (top-right on Fleet home):
 
