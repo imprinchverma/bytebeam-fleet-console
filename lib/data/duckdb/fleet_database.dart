@@ -107,16 +107,26 @@ class FleetDatabase {
 
   /// Linux tests/desktop need an explicit libduckdb.so; Android/iOS plugins bundle it.
   static void _bindNativeLibrary() {
-    if (!Platform.isLinux) return;
+    if (!Platform.isLinux && !Platform.isMacOS) return;
     const env = 'DUCKDB_LIBRARY_PATH';
+    final libName = Platform.isMacOS ? 'libduckdb.dylib' : 'libduckdb.so';
+    final os = Platform.isMacOS ? OperatingSystem.macOS : OperatingSystem.linux;
     final candidates = <String>[
       if (Platform.environment[env] != null) Platform.environment[env]!,
-      p.join(Directory.current.path, 'native', 'libduckdb.so'),
-      p.join(Directory.current.path, '..', 'duckdb', 'linux', 'Libraries', 'release', 'libduckdb.so'),
+      p.join(Directory.current.path, 'native', libName),
+      p.join(
+        Directory.current.path,
+        '..',
+        'duckdb',
+        Platform.isMacOS ? 'macos' : 'linux',
+        'Libraries',
+        'release',
+        libName,
+      ),
     ];
     for (final path in candidates) {
       if (File(path).existsSync()) {
-        duckdb_open.open.overrideFor(OperatingSystem.linux, path);
+        duckdb_open.open.overrideFor(os, path);
         return;
       }
     }
